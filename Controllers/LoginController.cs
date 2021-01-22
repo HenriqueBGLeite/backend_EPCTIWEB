@@ -32,7 +32,7 @@ namespace EPCTIWebApi.Controllers
 
             usuarioAutenticado = usuarioAutenticado.validaUsuario(usuario);
 
-            if ( usuarioAutenticado.Erro == "N" && usuarioAutenticado.Warning == "N" )
+            if (usuarioAutenticado.Erro == "N" && usuarioAutenticado.Warning == "N")
             {
                 //GERAÇÃO DO TOKEN
                 var claims = new[]

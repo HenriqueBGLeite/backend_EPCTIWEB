@@ -94,25 +94,29 @@ namespace EPCTIWebApi.Controllers
             }
         }
 
+        [Route("{codFilial}")]
+        public JsonResult ListaEnderecosLivres(int codFilial)
+        {
+            try
+            {
+                return Json(new Rotina9901Edita().ListaEnderecosLivres(codFilial));
+            }
+            catch (Exception ex)
+            {
+                HttpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                return Json(ex.Message);
+            }
+        }
+
         [HttpPost]
         public string GravarAlteracoesCadastro([FromBody] Rotina9901Edita dados)
         {
             try
             {
-                Boolean gravou = new Rotina9901Edita().GravarAlteracoesCadastro(dados);
-
-                if (gravou)
-                {
-                    return "Registro alterado com sucesso.";
-                }
-                else
-                {
-                    return "Ocorreu um erro ao salvar o registro. Tente novamente mais tarde.";
-                }
+                return new Rotina9901Edita().GravarAlteracoesCadastro(dados);
             }
             catch (Exception ex)
             {
-                HttpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 return ex.Message;
             }
         }

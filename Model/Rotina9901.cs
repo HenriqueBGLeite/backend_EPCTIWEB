@@ -303,7 +303,8 @@ namespace EPCTIWebApi.Model
 
                     queryPicking.Append("SELECT PF.CODPROD, PROD.DESCRICAO, to_number(PF.CODFILIAL), F.RAZAOSOCIAL, PK.TIPOENDERECO, TE.DESCRICAO, PK.TIPOESTRUTURA, TES.DESCRICAO, PK.TIPO, ");
                     queryPicking.Append("       PK.CODENDERECO, EN.DEPOSITO, EN.RUA, EN.PREDIO, EN.NIVEL, EN.APTO, PK.CAPACIDADE, ");
-                    queryPicking.Append("       ROUND((PK.PONTOREPOSICAO / PK.CAPACIDADE * 100), 3) AS PERCREPOSICAO, PK.PONTOREPOSICAO");
+                    queryPicking.Append("       ROUND((PK.PONTOREPOSICAO / PK.CAPACIDADE * 100), 3) AS PERCREPOSICAO, PK.PONTOREPOSICAO,");
+                    queryPicking.Append("       (SELECT NVL(QT, 0) FROM PCESTENDERECO WHERE CODENDERECO = EN.CODENDERECO) as estoque");
                     queryPicking.Append("  FROM PCPRODUT PROD INNER JOIN PCPRODFILIAL PF ON (PROD.CODPROD = PF.CODPROD)");
                     queryPicking.Append("                     INNER JOIN PCFILIAL F ON (PF.CODFILIAL = F.CODIGO)");
                     queryPicking.Append("                     INNER JOIN PCPRODUTPICKING PK ON (PF.CODPROD = PK.CODPROD AND PF.CODFILIAL = PK.CODFILIAL)");
@@ -337,8 +338,9 @@ namespace EPCTIWebApi.Model
                             Nivel              = picking.GetInt32(13),
                             Apto               = picking.GetInt32(14),
                             Capacidade         = picking.GetInt32(15),
-                            PontoReposicao     = picking.GetInt32(16),
-                            PercPontoReposicao = picking.GetInt32(17),
+                            PercPontoReposicao = picking.GetInt32(16),
+                            PontoReposicao     = picking.GetInt32(17),
+                            Estoque            = picking.GetInt32(18),
                         };
 
                         listaPicking.Add(pickingProduto);
@@ -508,14 +510,16 @@ namespace EPCTIWebApi.Model
             }
         }
 
-        public Boolean GravarAlteracoesCadastro(Rotina9901Edita dados)
+        public string GravarAlteracoesCadastro(Rotina9901Edita dados)
         {
             OracleConnection connection = DataBase.NovaConexao();
             OracleTransaction transacao = connection.BeginTransaction();
             OracleCommand exec = connection.CreateCommand();
-            
+            OracleCommand execProcedure = new OracleCommand("STP_CADASTRA_END_PK", connection);
+
             StringBuilder gravaDadosPCPRODUT = new StringBuilder();
             StringBuilder gravaDadosPCPRODFILIAL = new StringBuilder();
+            string erroGravacao = "";
 
             exec.Transaction = transacao;
 
@@ -592,54 +596,66 @@ namespace EPCTIWebApi.Model
 
                 if (dados.Picking.Count > 0)
                 {
-                    StringBuilder deletaPicking= new StringBuilder();
+                    if (dados.Picking.Count == 1 && (dados.Picking[0].CodEndereco == dados.Picking[0].CodEnderecoAnterior || dados.Picking[0].CodEnderecoAnterior == null))
+                    {
+                        StringBuilder deletaPk = new StringBuilder();
+                        StringBuilder deletaPkEnd = new StringBuilder();
+                        StringBuilder deletaPkEst = new StringBuilder();
 
-                    deletaPicking.Append($"DELETE FROM PCPRODUTPICKING WHERE CODPROD = {dados.Codprod} AND CODFILIAL = {dados.Codfilial}");
-                    deletaPicking.Append("  AND CODENDERECO IN (SELECT CODENDERECO FROM PCTIPOPAL WHERE ENDERECOLOJA = 'N')");
-                    
-                    exec.CommandText = deletaPicking.ToString();
-                    OracleDataReader deletaPK = exec.ExecuteReader();
+                        deletaPkEnd.Append("UPDATE PCENDERECO SET SITUACAO = 'L' ");
+                        deletaPkEnd.Append($"WHERE CODFILIAL = {dados.Picking[0].Codfilial} ");
+                        deletaPkEnd.Append("   AND CODENDERECO IN (SELECT CODENDERECO FROM PCESTENDERECO ");
+                        deletaPkEnd.Append($"                       WHERE CODPROD = {dados.Picking[0].Codprod} ");
+                        deletaPkEnd.Append($"                         AND CODENDERECO <> {dados.Picking[0].CodEndereco})");
 
-                    StringBuilder liberaPicking = new StringBuilder();
+                        exec.CommandText = deletaPkEnd.ToString();
+                        OracleDataReader deletaPkEND = exec.ExecuteReader();
 
-                    liberaPicking.Append($"UPDATE PCENDERECO SET SITUACAO = 'L' WHERE CODFILIAL = {dados.Codfilial} AND TIPOENDER = 'AP'");
-                    liberaPicking.Append($"   AND CODENDERECO IN (SELECT CODENDERECO FROM PCESTENDERECO WHERE CODPROD = {dados.Codprod})");
+                        deletaPkEst.Append("DELETE FROM PCESTENDERECO ");
+                        deletaPkEst.Append($"WHERE CODPROD = {dados.Picking[0].Codprod} ");
+                        deletaPkEst.Append("   AND CODENDERECO IN (SELECT CODENDERECO FROM PCENDERECO ");
+                        deletaPkEst.Append($"                       WHERE CODFILIAL = {dados.Picking[0].Codfilial} ");
+                        deletaPkEst.Append($"                         AND CODENDERECO <> {dados.Picking[0].CodEndereco})");
 
-                    exec.CommandText = liberaPicking.ToString();
-                    OracleDataReader liberaPK = exec.ExecuteReader();
+                        exec.CommandText = deletaPkEst.ToString();
+                        OracleDataReader deletaPkEST = exec.ExecuteReader();
 
-                    StringBuilder deletaPickingEstoque = new StringBuilder();
+                        deletaPk.Append("DELETE FROM PCPRODUTPICKING ");
+                        deletaPk.Append($"WHERE CODPROD = {dados.Picking[0].Codprod} ");
+                        deletaPk.Append($"  AND CODFILIAL = {dados.Picking[0].Codfilial} ");
+                        deletaPk.Append($"  AND CODENDERECO <> {dados.Picking[0].CodEndereco}");
 
-                    deletaPickingEstoque.Append($"DELETE FROM PCESTENDERECO WHERE CODPROD = {dados.Codprod}");
-                    deletaPickingEstoque.Append($"   AND CODENDERECO IN (SELECT CODENDERECO FROM PCENDERECO WHERE CODFILIAL = {dados.Codfilial} AND TIPOENDER = 'AP')");
-
-                    exec.CommandText = deletaPickingEstoque.ToString();
-                    OracleDataReader deletaPKEstoque = exec.ExecuteReader();
+                        exec.CommandText = deletaPk.ToString();
+                        OracleDataReader deletaPK = exec.ExecuteReader();
+                    }
 
                     dados.Picking.ForEach(pk =>
                     {
-                        StringBuilder inserePicking = new StringBuilder();
+                        execProcedure = new OracleCommand("STP_CADASTRA_END_PK", connection)
+                        {
+                            CommandType = CommandType.StoredProcedure
+                        };
 
-                        inserePicking.Append("INSERT INTO PCPRODUTPICKING (CODPROD, CODFILIAL, CODENDERECO, TIPO, CAPACIDADE, PONTOREPOSICAO, TIPOESTRUTURA, TIPOENDERECO, CODENDERECOPTL)");
-                        inserePicking.Append($"    VALUES ({pk.Codprod}, {pk.Codfilial}, {pk.CodEndereco}, '{pk.TipoPicking}', {pk.Capacidade}, {pk.PontoReposicao}, {pk.CodTipoEstrutura}, {pk.CodTipoEndereco}, NULL)");
+                        execProcedure.Parameters.Add("PCODPROD", OracleDbType.Int32).Value = pk.Codprod;
+                        execProcedure.Parameters.Add("PCODFILIAL", OracleDbType.Int32).Value = pk.Codfilial;
+                        execProcedure.Parameters.Add("PCODENDERECO", OracleDbType.Int32).Value = pk.CodEndereco;
+                        execProcedure.Parameters.Add("PTIPOPICKING", OracleDbType.Varchar2).Value = pk.TipoPicking;
+                        execProcedure.Parameters.Add("PCAPACIDADE", OracleDbType.Int32).Value = pk.Capacidade;
+                        execProcedure.Parameters.Add("PPONTOREPOSICAO", OracleDbType.Int32).Value = pk.PontoReposicao;
+                        execProcedure.Parameters.Add("PCODTIPOESTRUTURA", OracleDbType.Int32).Value = pk.CodTipoEstrutura;
+                        execProcedure.Parameters.Add("PCODTIPOENDERECO", OracleDbType.Int32).Value = pk.CodTipoEndereco;
+                        execProcedure.Parameters.Add("PCODFUNC", OracleDbType.Int32).Value = dados.CodFunc;
 
-                        exec.CommandText = inserePicking.ToString();
-                        OracleDataReader inserePK = exec.ExecuteReader();
+                        OracleParameter resposta = new OracleParameter("@Resposta", OracleDbType.Varchar2, 1000)
+                        {
+                            Direction = ParameterDirection.Output
+                        };
 
-                        StringBuilder inserePickingEstoque = new StringBuilder();
+                        execProcedure.Parameters.Add(resposta);
 
-                        inserePickingEstoque.Append("INSERT INTO PCESTENDERECO (CODPROD, CODENDERECO)");
-                        inserePickingEstoque.Append($"    VALUES ({pk.Codprod}, {pk.CodEndereco})");
+                        execProcedure.ExecuteNonQuery();
 
-                        exec.CommandText = inserePickingEstoque.ToString();
-                        OracleDataReader inserePKEstoque = exec.ExecuteReader();
-
-                        StringBuilder bloqueiaPicking = new StringBuilder();
-
-                        bloqueiaPicking.Append($"UPDATE PCENDERECO SET SITUACAO = 'O' WHERE CODENDERECO = {pk.CodEndereco}");
-
-                        exec.CommandText = bloqueiaPicking.ToString();
-                        OracleDataReader bloqueiaPK = exec.ExecuteReader();
+                        erroGravacao = resposta.Value.ToString();                                        
                     });
                 }
 
@@ -707,8 +723,16 @@ namespace EPCTIWebApi.Model
                     });
                 }
 
-                transacao.Commit();
-                return true;
+                if (erroGravacao == "Picking cadastrado com sucesso!" || erroGravacao.IndexOf("O.S. de transferência gerada com sucesso. Número: ") > 1)
+                {
+                    transacao.Commit();
+                    return "Dados gravados com sucesso!";
+                } 
+                else
+                {
+                    transacao.Rollback();
+                    return erroGravacao;
+                }                
             }
             catch (Exception ex)
             {
@@ -749,7 +773,7 @@ namespace EPCTIWebApi.Model
             try
             {
                 query.Append("SELECT EN.CODENDERECO, EN.DEPOSITO, EN.RUA, EN.PREDIO, EN.NIVEL, EN.APTO, ");
-                query.Append("       EN.TIPOPAL, TE.DESCRICAO AS DESCENDERECO, EN.CODESTRUTURA, TES.DESCRICAO AS DESCESTRUTURA, ");
+                query.Append("       EN.TIPOPAL AS \"codTipoEndereco\", TE.DESCRICAO AS DESCENDERECO, EN.CODESTRUTURA AS \"codTipoEstrutura\", TES.DESCRICAO AS DESCESTRUTURA, ");
                 query.Append("       DECODE(EN.STATUS, 'N', 'NORMAL', 'A', 'AVARIA', 'F', 'FALTA', 'E', 'EXESSO', 'C', 'CROSS', 'NÃO INF.') STATUS");
                 query.Append("  FROM PCENDERECO EN INNER JOIN PCTIPOPAL TE ON (EN.TIPOPAL = TE.CODIGO)");
                 query.Append("                     INNER JOIN PCTIPOESTRUTURA TES ON (EN.CODESTRUTURA = TES.CODIGO) ");
@@ -812,6 +836,62 @@ namespace EPCTIWebApi.Model
                 query.Append($"WHERE EN.CODFILIAL = {codFilial}");
                 query.Append("   AND NVL(EN.BLOQUEIO, 'N') = 'N'");
                 query.Append("   AND NVL(TE.ENDERECOLOJA, 'N') = 'S'");
+                query.Append("   AND NVL(EN.SITUACAO, 'L') = 'L'");
+                query.Append(" ORDER BY EN.RUA, CASE WHEN MOD(EN.RUA, 2) = 1 THEN EN.PREDIO END ASC, CASE WHEN MOD(EN.RUA, 2) = 0 THEN EN.PREDIO END DESC, EN.NIVEL, EN.APTO");
+
+                exec.CommandText = query.ToString();
+                OracleDataAdapter oda = new OracleDataAdapter(exec);
+                oda.SelectCommand = exec;
+                oda.Fill(enderecos);
+
+                return enderecos;
+            }
+            catch (Exception ex)
+            {
+                if (connection.State == ConnectionState.Open)
+                {
+                    connection.Close();
+
+                    throw new Exception(ex.ToString());
+                }
+
+                exec.Dispose();
+                connection.Dispose();
+
+                throw new Exception(ex.ToString());
+            }
+            finally
+            {
+                if (connection.State == ConnectionState.Open)
+                {
+                    connection.Close();
+                }
+                exec.Dispose();
+                connection.Dispose();
+            }
+        }
+
+        public DataTable ListaEnderecosLivres(int codFilial)
+        {
+            OracleConnection connection = DataBase.NovaConexao();
+            OracleCommand exec = connection.CreateCommand();
+
+            DataTable enderecos = new DataTable();
+
+            StringBuilder query = new StringBuilder();
+
+            try
+            {
+                query.Append("SELECT EN.CODENDERECO, EN.DEPOSITO, EN.RUA, EN.PREDIO, EN.NIVEL, EN.APTO, ");
+                query.Append("       EN.TIPOPAL AS \"codTipoEndereco\", TE.DESCRICAO AS DESCENDERECO, EN.CODESTRUTURA AS \"codTipoEstrutura\", TES.DESCRICAO AS DESCESTRUTURA, ");
+                query.Append("       DECODE(EN.STATUS, 'N', 'NORMAL', 'A', 'AVARIA', 'F', 'FALTA', 'E', 'EXESSO', 'C', 'CROSS', 'NÃO INF.') STATUS");
+                query.Append("  FROM PCENDERECO EN INNER JOIN PCTIPOPAL TE ON (EN.TIPOPAL = TE.CODIGO)");
+                query.Append("                     INNER JOIN PCTIPOESTRUTURA TES ON (EN.CODESTRUTURA = TES.CODIGO) ");
+                query.Append($"WHERE EN.CODFILIAL = {codFilial}");
+                query.Append("   AND NVL(EN.BLOQUEIO, 'N') = 'N'");
+                query.Append("   AND EN.TIPOENDER = 'AP'");
+                query.Append("   AND NVL(TE.ENDERECOLOJA, 'N') = 'N'");
+                query.Append("   AND NVL(EN.SITUACAO, 'L') = 'L'");
                 query.Append(" ORDER BY EN.RUA, CASE WHEN MOD(EN.RUA, 2) = 1 THEN EN.PREDIO END ASC, CASE WHEN MOD(EN.RUA, 2) = 0 THEN EN.PREDIO END DESC, EN.NIVEL, EN.APTO");
 
                 exec.CommandText = query.ToString();
@@ -852,7 +932,6 @@ namespace EPCTIWebApi.Model
         public List<TipoEstrutura> TipoEstrutura { get; set; }
         public List<TipoEndereco> TipoEndereco { get; set; }
         public List<CaracteristicaProduto> CaracteristicaProduto { get; set; }
-        
         public ListaDataProduto BuscaListaDataProduto()
         {
             OracleConnection connection = DataBase.NovaConexao();
@@ -963,6 +1042,7 @@ namespace EPCTIWebApi.Model
         public string DescTipoEstrutura { get; set; }
         public string TipoPicking { get; set; }
         public int CodEndereco { get; set; }
+        public int? CodEnderecoAnterior { get; set; }
         public int Deposito { get; set; }
         public int Rua { get; set; }
         public int Predio { get; set; }
@@ -971,6 +1051,7 @@ namespace EPCTIWebApi.Model
         public int Capacidade { get; set; }
         public double PercPontoReposicao { get; set; }
         public double PontoReposicao { get; set; }
+        public int Estoque { get; set; }
     }
     
     public class EnderecoLoja
