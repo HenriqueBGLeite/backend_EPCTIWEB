@@ -66,12 +66,12 @@ namespace EPCTIWebApi.Controllers
             }
         }
         
-        [Route("{codFilial}/{tipoEndereco}/{tipoEstrutura}")]
-        public JsonResult ListaEnderecos(int codFilial, int tipoEndereco, int tipoEstrutura)
+        [HttpPost]
+        public JsonResult ListaEnderecos([FromBody] DTOPesquisaEndereco dados)
         {
             try
             {
-                return Json(new Rotina9901Edita().ListaEnderecos(codFilial, tipoEndereco, tipoEstrutura));
+                return Json(new Rotina9901Edita().ListaEnderecos(dados));
             }
             catch (Exception ex)
             {

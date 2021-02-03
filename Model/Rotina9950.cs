@@ -590,7 +590,7 @@ namespace EPCTIWebApi.Model
                     if (dado.Modelosep == "C")
                     {
 
-                        marcaPedidosCarga.Append($"UPDATE PCPEDC SET USAINTEGRACAOWMS = 'S', CODFUNCEXPINTWMS = {dado.Codfuncger} WHERE NUMCAR = {dado.Numcar}");
+                        marcaPedidosCarga.Append($"UPDATE PCPEDC SET USAINTEGRACAOWMS = 'S', CODFUNCEXPINTWMS = {dado.Codfuncger}, DTIMPORTACAOWMS = SYSDATE WHERE NUMCAR = {dado.Numcar}");
 
                         updatePedCar.CommandText = marcaPedidosCarga.ToString();
                         OracleDataReader updateCarga = updatePedCar.ExecuteReader();
@@ -625,7 +625,7 @@ namespace EPCTIWebApi.Model
                     }
                     else
                     {
-                        marcaPedidosCarga.Append($"UPDATE PCPEDC SET USAINTEGRACAOWMS = 'S', CODFUNCEXPINTWMS = {dado.Codfuncger} WHERE NUMPED = {dado.Numped}");
+                        marcaPedidosCarga.Append($"UPDATE PCPEDC SET USAINTEGRACAOWMS = 'S', CODFUNCEXPINTWMS = {dado.Codfuncger}, DTIMPORTACAOWMS = SYSDATE WHERE NUMPED = {dado.Numped}");
 
                         updatePedCar.CommandText = marcaPedidosCarga.ToString();
                         OracleDataReader updatePedido = updatePedCar.ExecuteReader();
@@ -666,7 +666,7 @@ namespace EPCTIWebApi.Model
                     return resposta.Value.ToString();
                 }
                 else
-                {
+                {/*
                     StringBuilder verificaJob = new StringBuilder();
                     StringBuilder geraAbastecimentoCarga = new StringBuilder();
 
@@ -678,6 +678,7 @@ namespace EPCTIWebApi.Model
                     {
                         verificaJob.Append("SELECT CASE WHEN COUNT(*) > 0 THEN 'S' ELSE 'N' END AS v_job_running FROM SYS.ALL_SCHEDULER_RUNNING_JOBS WHERE UPPER(JOB_NAME) = 'GERA_ABASTECIMENTO_CORRETIVO'");
                     }
+
                     abastecimento.CommandText = verificaJob.ToString();
                     OracleDataReader jobExecucao = abastecimento.ExecuteReader();
 
@@ -700,6 +701,7 @@ namespace EPCTIWebApi.Model
                             OracleDataReader execAbastecimento = abastecimento.ExecuteReader();
                         }
                     }
+                    */
 
                     transacao.Commit();
 
@@ -959,33 +961,40 @@ namespace EPCTIWebApi.Model
         public Int32? Numcar { get; set; }
         public Int32? Numtranswms { get; set; }
         public int Codfuncger { get; set; }
+        public string ModeloSep { get; set; }
         public Boolean Homologacao { get; set; }
 
         public string Corte(Rotina9950Corte dados)
         {
             OracleConnection connection = DataBase.NovaConexao();
-            OracleCommand exec = new OracleCommand("stp_corte_wms", connection);
+            OracleCommand exec = new OracleCommand();
 
             try
             {
                 if (dados.Homologacao)
                 {
                     exec = new OracleCommand("stp_corte_wms_homologacao", connection);
+                } 
+                else
+                {
+                    exec = new OracleCommand("stp_corte_wms", connection);
                 }
 
                 if (dados.Numcar != -1)
                 {
                     exec.CommandType = CommandType.StoredProcedure;
 
-                    exec.Parameters.Add("p_numCar", OracleDbType.Int32).Value = dados.Numcar;
+                    exec.Parameters.Add("P_NUMCAR", OracleDbType.Int64).Value = dados.Numcar;
                     
-                    exec.Parameters.Add("p_numtranswms", OracleDbType.Int32).Value = dados.Numtranswms;
+                    exec.Parameters.Add("P_NUMTRANSWMS", OracleDbType.Int64).Value = dados.Numtranswms;
 
-                    exec.Parameters.Add("p_codfuncger", OracleDbType.Varchar2).Value = dados.Codfuncger;
+                    exec.Parameters.Add("P_FUNCCORTE", OracleDbType.Int64).Value = dados.Codfuncger;
 
-                    exec.Parameters.Add("p_motivoCorte", OracleDbType.Int32).Value = 38; // MOTIVO DO CORTE
+                    exec.Parameters.Add("P_MOTIVOCORTE", OracleDbType.Int32).Value = 38; // MOTIVO DO CORTE
 
-                    OracleParameter resposta = new OracleParameter("@Resposta", OracleDbType.Varchar2, 10000)
+                    exec.Parameters.Add("P_MODELO_SEP", OracleDbType.Varchar2).Value = dados.ModeloSep;
+
+                    OracleParameter resposta = new OracleParameter("@Resposta", OracleDbType.Varchar2, 20000)
                     {
                         Direction = ParameterDirection.Output
                     };
@@ -1000,15 +1009,17 @@ namespace EPCTIWebApi.Model
                 {
                     exec.CommandType = CommandType.StoredProcedure;
 
-                    exec.Parameters.Add("p_numCar", OracleDbType.Int32).Value = dados.Numcar;
+                    exec.Parameters.Add("P_NUMCAR", OracleDbType.Int64).Value = dados.Numcar;
                     
-                    exec.Parameters.Add("p_numtranswms", OracleDbType.Int32).Value = dados.Numtranswms;
+                    exec.Parameters.Add("P_NUMTRANSWMS", OracleDbType.Int64).Value = dados.Numtranswms;
 
-                    exec.Parameters.Add("p_codfuncger", OracleDbType.Varchar2).Value = dados.Codfuncger;
+                    exec.Parameters.Add("P_FUNCCORTE", OracleDbType.Int64).Value = dados.Codfuncger;
 
-                    exec.Parameters.Add("p_motivoCorte", OracleDbType.Int32).Value = 38; // MOTIVO DO CORTE
+                    exec.Parameters.Add("P_MOTIVOCORTE", OracleDbType.Int32).Value = 38; // MOTIVO DO CORTE
 
-                    OracleParameter resposta = new OracleParameter("@Resposta", OracleDbType.Varchar2, 10000)
+                    exec.Parameters.Add("P_MODELO_SEP", OracleDbType.Varchar2).Value = dados.ModeloSep;
+
+                    OracleParameter resposta = new OracleParameter("@Resposta", OracleDbType.Varchar2, 20000)
                     {
                         Direction = ParameterDirection.Output
                     };
@@ -1019,7 +1030,7 @@ namespace EPCTIWebApi.Model
 
                     return resposta.Value.ToString();
                 }
-                               
+
             }
             catch (Exception ex)
             {
@@ -1082,28 +1093,55 @@ namespace EPCTIWebApi.Model
                 }
                 else
                 {
-                    query.Append("SELECT mov.codfilial, mov.numtranswms, mov.numos, mov.tipoos, mov.numpalete, ");
-                    query.Append("       mov.codprod || ' - ' || prod.descricao as produto, mov.qt AS qtos, nvl(mov.qtconferida, 0) as qtconf, ");
-                    query.Append("       mov.qt - NVL(mov.qtconferida, 0) AS qtcorte, (mov.qt - (mov.qt - NVL(mov.qtconferida, 0))) as qtfaturar, ((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda) as vlcorte,");
-                    query.Append("       sum(((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda)) over(partition by mov.numcar) as vlcortetotal");
-                    query.Append("  FROM pcmovendpend mov inner join pcprodut prod on (mov.codprod = prod.codprod)");
-                    query.Append("                        inner join pcpedc pc on (mov.numtranswms = pc.numtranswms and mov.numcar = pc.numcar)");
-                    query.Append("                        inner join pcpedi pi on (pc.numped = pi.numped and mov.codprod = pi.codprod) ");
-                    query.Append($"WHERE mov.numtranswms = {valorBusca}");
-                    query.Append("   AND (mov.qt - NVL(mov.qtconferida, 0)) > 0");
-                    query.Append("   AND mov.dtestorno IS NULL");
-                    query.Append("   AND mov.dtfimconferencia IS NULL");
-                    query.Append("   AND mov.separacaoantecipada = 'S'");
-                    query.Append("   AND mov.posicao = 'P'");
-                    query.Append("   AND mov.tipoos = 13");
-                    query.Append(" ORDER BY mov.qt - NVL(mov.qtconferida, 0) DESC ");
+                    if(tipoBusca == "A")
+                    {
+                        query.Append("SELECT mov.codfilial, mov.numtranswms, mov.numos, mov.tipoos, mov.numpalete, ");
+                        query.Append("       mov.codprod || ' - ' || prod.descricao as produto, mov.qt AS qtos, nvl(mov.qtconferida, 0) as qtconf, ");
+                        query.Append("       mov.qt - NVL(mov.qtconferida, 0) AS qtcorte, (mov.qt - (mov.qt - NVL(mov.qtconferida, 0))) as qtfaturar, ((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda) as vlcorte,");
+                        query.Append("       sum(((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda)) over(partition by mov.numcar) as vlcortetotal");
+                        query.Append("  FROM pcmovendpend mov inner join pcprodut prod on (mov.codprod = prod.codprod)");
+                        query.Append("                        inner join pcpedc pc on (mov.numtranswms = pc.numtranswms and mov.numcar = pc.numcar)");
+                        query.Append("                        inner join pcpedi pi on (pc.numped = pi.numped and mov.codprod = pi.codprod) ");
+                        query.Append($"WHERE mov.numtranswms = {valorBusca}");
+                        query.Append("   AND (mov.qt - NVL(mov.qtconferida, 0)) > 0");
+                        query.Append("   AND mov.dtestorno IS NULL");
+                        query.Append("   AND mov.dtfimconferencia IS NULL");
+                        query.Append("   AND mov.separacaoantecipada = 'S'");
+                        query.Append("   AND mov.posicao = 'P'");
+                        query.Append("   AND mov.tipoos = 13");
+                        query.Append(" ORDER BY mov.qt - NVL(mov.qtconferida, 0) DESC ");
 
-                    exec.CommandText = query.ToString();
-                    OracleDataAdapter oda = new OracleDataAdapter(exec);
-                    oda.SelectCommand = exec;
-                    oda.Fill(cortesTransacao);
+                        exec.CommandText = query.ToString();
+                        OracleDataAdapter oda = new OracleDataAdapter(exec);
+                        oda.SelectCommand = exec;
+                        oda.Fill(cortesTransacao);
 
-                    return cortesTransacao;
+                        return cortesTransacao;
+                    }
+                    else
+                    {
+                        query.Append("SELECT mov.codfilial, mov.numtranswms, mov.numos, mov.tipoos, mov.numpalete, ");
+                        query.Append("       mov.codprod || ' - ' || prod.descricao as produto, mov.qt AS qtos, nvl(mov.qtconferida, 0) as qtconf, ");
+                        query.Append("       mov.qt - NVL(mov.qtconferida, 0) AS qtcorte, (mov.qt - (mov.qt - NVL(mov.qtconferida, 0))) as qtfaturar, ((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda) as vlcorte,");
+                        query.Append("       sum(((mov.qt - NVL(mov.qtconferida, 0)) * pi.pvenda)) over(partition by mov.numcar) as vlcortetotal");
+                        query.Append("  FROM pcmovendpend mov inner join pcprodut prod on (mov.codprod = prod.codprod)");
+                        query.Append("                        inner join pcpedc pc on (mov.numtranswms = pc.numtranswms and mov.numcar = pc.numcar)");
+                        query.Append("                        inner join pcpedi pi on (pc.numped = pi.numped and mov.codprod = pi.codprod) ");
+                        query.Append($"WHERE mov.numtranswms = {valorBusca}");
+                        query.Append("   AND (mov.qt - NVL(mov.qtconferida, 0)) > 0");
+                        query.Append("   AND mov.dtestorno IS NULL");
+                        query.Append("   AND mov.dtfimconferencia IS NULL");
+                        query.Append("   AND mov.posicao = 'P'");
+                        query.Append(" ORDER BY mov.qt - NVL(mov.qtconferida, 0) DESC ");
+
+                        exec.CommandText = query.ToString();
+                        OracleDataAdapter oda = new OracleDataAdapter(exec);
+                        oda.SelectCommand = exec;
+                        oda.Fill(cortesTransacao);
+
+                        return cortesTransacao;
+                    }
+                    
                 }
             }
             catch (Exception ex)
