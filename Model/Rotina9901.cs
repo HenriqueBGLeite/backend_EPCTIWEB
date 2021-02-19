@@ -306,7 +306,13 @@ namespace EPCTIWebApi.Model
                     queryPicking.Append("SELECT PF.CODPROD, PROD.DESCRICAO, to_number(PF.CODFILIAL), F.RAZAOSOCIAL, PK.TIPOENDERECO, TE.DESCRICAO, PK.TIPOESTRUTURA, TES.DESCRICAO, PK.TIPO, ");
                     queryPicking.Append("       PK.CODENDERECO, EN.DEPOSITO, EN.RUA, EN.PREDIO, EN.NIVEL, EN.APTO, PK.CAPACIDADE, ");
                     queryPicking.Append("       ROUND((PK.PONTOREPOSICAO / PK.CAPACIDADE * 100), 3) AS PERCREPOSICAO, PK.PONTOREPOSICAO,");
-                    queryPicking.Append("       (SELECT NVL(QT, 0) FROM PCESTENDERECO WHERE CODENDERECO = EN.CODENDERECO) as estoque");
+                    queryPicking.Append($"      CASE WHEN (SELECT NVL(VALOR,'N') FROM PCPARAMETROWMS WHERE NOME = 'TRANSFERENCIATROCAPICKINGOSPENDENTE' AND CODFILIAL = {CodFilial}) = 'S' ");
+                    queryPicking.Append("            THEN 'S'");
+                    queryPicking.Append("            ELSE (SELECT CASE WHEN NVL(QT, 0) > 0 AND (NVL(QTPENDENTRADA, 0) + NVL(QTPENDSAIDA, 0)) = 0 THEN 'S' ELSE 'N' END AS PODE_TRANSF");
+                    queryPicking.Append("                    FROM PCESTENDERECO WHERE CODENDERECO = EN.CODENDERECO)");
+                    queryPicking.Append("        END PERMITE_TRANSF,");
+                    queryPicking.Append("       (SELECT CASE WHEN NVL(QT, 0) = 0 AND (NVL(QTPENDENTRADA, 0) + NVL(QTPENDSAIDA, 0)) = 0 THEN 'S' ELSE 'N' END AS PODE_EXCLUIR ");
+                    queryPicking.Append("          FROM PCESTENDERECO WHERE CODENDERECO = EN.CODENDERECO) AS PERMITE_EXCLUIR");
                     queryPicking.Append("  FROM PCPRODUT PROD INNER JOIN PCPRODFILIAL PF ON (PROD.CODPROD = PF.CODPROD)");
                     queryPicking.Append("                     INNER JOIN PCFILIAL F ON (PF.CODFILIAL = F.CODIGO)");
                     queryPicking.Append("                     INNER JOIN PCPRODUTPICKING PK ON (PF.CODPROD = PK.CODPROD AND PF.CODFILIAL = PK.CODFILIAL)");
@@ -315,7 +321,7 @@ namespace EPCTIWebApi.Model
                     queryPicking.Append("                     INNER JOIN PCENDERECO EN ON (PK.CODENDERECO = EN.CODENDERECO) ");
                     queryPicking.Append($"WHERE PF.CODPROD = {produto.Codprod}");
                     queryPicking.Append($"  AND PF.CODFILIAL = {CodFilial}");
-                    queryPicking.Append($"  AND NVL(TE.ENDERECOLOJA, 'N') = 'N'");
+                    queryPicking.Append("   AND NVL(TE.ENDERECOLOJA, 'N') = 'N'");
 
                     exec.CommandText = queryPicking.ToString();
                     OracleDataReader picking = exec.ExecuteReader();
@@ -342,7 +348,8 @@ namespace EPCTIWebApi.Model
                             Capacidade         = picking.GetInt32(15),
                             PercPontoReposicao = picking.GetInt32(16),
                             PontoReposicao     = picking.GetInt32(17),
-                            Estoque            = picking.GetInt32(18),
+                            PermiteTransfPk    = picking.GetString(18),
+                            PermiteExcluirPk   = picking.GetString(19),
                         };
 
                         listaPicking.Add(pickingProduto);
@@ -1142,7 +1149,8 @@ namespace EPCTIWebApi.Model
         public int Capacidade { get; set; }
         public double PercPontoReposicao { get; set; }
         public double PontoReposicao { get; set; }
-        public int Estoque { get; set; }
+        public string PermiteTransfPk { get; set; }
+        public string PermiteExcluirPk { get; set; }
     }
     
     public class EnderecoLoja

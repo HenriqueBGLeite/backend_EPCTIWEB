@@ -580,6 +580,7 @@ namespace EPCTIWebApi.Model
             updatePedCar.Transaction = transacao;
 
             string respostaGeracao = "";
+            string cargasComAntecipPendente = "";
 
             try
             {
@@ -620,6 +621,24 @@ namespace EPCTIWebApi.Model
                         exec.Parameters.Add(resposta);
 
                         exec.ExecuteNonQuery();
+
+                        StringBuilder validaAntecipadoSemConf = new StringBuilder();
+
+                        validaAntecipadoSemConf.Append("SELECT NUMCAR");
+                        validaAntecipadoSemConf.Append("  FROM PCMOVENDPEND ");
+                        validaAntecipadoSemConf.Append($"WHERE NUMCAR = {dado.Numcar} AND SEPARACAOANTECIPADA = 'S' ");
+                        validaAntecipadoSemConf.Append("   AND NVL(QT, 0) <> NVL(QTCONFERIDA, 0) AND DTESTORNO IS NULL ");
+                        validaAntecipadoSemConf.Append(" GROUP BY NUMCAR");
+
+                        updatePedCar.CommandText = validaAntecipadoSemConf.ToString();
+                        OracleDataReader validacaoAntecipado = updatePedCar.ExecuteReader();
+
+                        if (validacaoAntecipado.Read())
+                        {
+                            int carga = validacaoAntecipado.GetInt32(0);
+
+                            cargasComAntecipPendente += carga + " ";
+                        }
 
                         respostaGeracao = resposta.Value.ToString();
                     }
@@ -666,7 +685,7 @@ namespace EPCTIWebApi.Model
                     return resposta.Value.ToString();
                 }
                 else
-                {/*
+                {
                     StringBuilder verificaJob = new StringBuilder();
                     StringBuilder geraAbastecimentoCarga = new StringBuilder();
 
@@ -701,11 +720,20 @@ namespace EPCTIWebApi.Model
                             OracleDataReader execAbastecimento = abastecimento.ExecuteReader();
                         }
                     }
-                    */
 
                     transacao.Commit();
 
+                    if (!string.IsNullOrEmpty(cargasComAntecipPendente))
+                    {
+                        return respostaGeracao + " Carga(s) com antecipado pendente: " + cargasComAntecipPendente;
+                    } 
+                    else
+                    {
+                        return respostaGeracao;
+                    }
+
                     return respostaGeracao;
+
                 }
                 
             }
