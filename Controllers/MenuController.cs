@@ -18,5 +18,10 @@ namespace EPCTIWebApi.Controllers
         {
             return Json(new Menu().BuscarRotinas(matricula));
         }
+
+        public JsonResult BuscaFiliais(int matricula)
+        {
+            return Json(new Menu().BuscaFiliais(matricula));
+        }
     }
 }

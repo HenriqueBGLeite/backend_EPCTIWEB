@@ -823,6 +823,7 @@ namespace EPCTIWebApi.Model
                 }
 
                 transacao.Rollback();
+                execProcedure.Dispose();
                 exec.Dispose();
                 connection.Dispose();
 
@@ -835,6 +836,7 @@ namespace EPCTIWebApi.Model
                     connection.Close();
                 }
                 exec.Dispose();
+                execProcedure.Dispose();
                 connection.Dispose();
             }
         }

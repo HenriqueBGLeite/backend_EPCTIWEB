@@ -2,3 +2,6 @@
 
 # CS8123: O nome do elemento de tupla é ignorado porque um nome diferente ou nenhum nome foi especificado pelo destino de atribuição.
 dotnet_diagnostic.CS8123.severity = suggestion
+
+# Default severity for analyzer diagnostics with category 'Usage'
+dotnet_analyzer_diagnostic.category-Usage.severity = none

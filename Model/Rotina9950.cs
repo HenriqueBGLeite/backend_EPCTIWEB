@@ -731,9 +731,6 @@ namespace EPCTIWebApi.Model
                     {
                         return respostaGeracao;
                     }
-
-                    return respostaGeracao;
-
                 }
                 
             }
@@ -743,7 +740,7 @@ namespace EPCTIWebApi.Model
                 {
                     transacao.Rollback();
                     connection.Close();
-                    throw new Exception(ex.ToString());
+                    throw;
                 }
 
                 transacao.Rollback();
@@ -752,7 +749,7 @@ namespace EPCTIWebApi.Model
                 exec.Dispose();
                 connection.Dispose();
 
-                throw new Exception(ex.ToString());
+                throw;
             }
             finally
             {
